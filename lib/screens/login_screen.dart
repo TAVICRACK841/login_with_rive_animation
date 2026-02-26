@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:rive/rive.dart';
+import 'dart:async'; //3.1 importa el timer para simular la autenticación
 
 
 class LoginScreen extends StatefulWidget {
@@ -21,10 +22,14 @@ class _LoginScreenState extends State<LoginScreen> {
   SMIBool? _isHandsUp; //variable para controlar la animación de Rive cuando el usuario está escribiendo en el campo de password
   SMITrigger? _trigSuccess; //variable para controlar la animación de Rive cuando el usuario hace clic en el botón de login
   SMITrigger? _trigFail; //variable para controlar la animación de Rive cuando el usuario hace clic en el botón de login y la autenticación falla
+  SMINumber? _numLook; //variable para controlar la animación de Rive cuando el usuario mueve el mouse sobre el campo de email o password
 
   //paso 1.1: crear variables para el focus de los campos de texto
   final _emailFocusNode = FocusNode();
   final _passwordFocusNode = FocusNode();
+
+  //3.2 timer para dejar de escribir
+  Timer? _typingDebounce;
   
   //paso 1.2: Listenrs para FocusNodes (Oyentes/Chismosos)
   @override
@@ -35,6 +40,8 @@ class _LoginScreenState extends State<LoginScreen> {
         if(_isHandsUp != null){
           //No tapes los ojos al ver email
           _isHandsUp?.change(false);
+          //mirada neutral
+          _numLook?.value = 50.0;
         }
       }
     }); 
@@ -60,10 +67,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   if(_controller == null) return;
                   artboart.addController(_controller!);
                   //vinculamos las variables de la animación de Rive con las variables de Flutter para poder controlar la animación desde el código de Flutter
-                  _isChecking = _controller!.findSMI('isChecking') as SMIBool;
-                  _isHandsUp = _controller!.findSMI('isHandsUp') as SMIBool;
-                  _trigSuccess = _controller!.findSMI('trigSuccess') as SMITrigger;
-                  _trigFail = _controller!.findSMI('trigFail') as SMITrigger;
+                  _isChecking = _controller!.findSMI('isChecking');
+                  _isHandsUp = _controller!.findSMI('isHandsUp');
+                  _trigSuccess = _controller!.findSMI('trigSuccess');
+                  _trigFail = _controller!.findSMI('trigFail');
+                  _numLook = _controller!.findSMI('numLook');
                 },
                 )),
               const SizedBox(height: 10), //separación entre la animación y el campo de email
@@ -78,9 +86,26 @@ class _LoginScreenState extends State<LoginScreen> {
                   }
                   //Si isChecking no es null
                   if(_isChecking == null) return;
+
                   //Activar modo chismoso
-                    _isChecking!.change(true); 
+                    _isChecking!.change(true);
+
+                    //2.4 implementar numlook
+                    //ajustes de limites de 0 a 100
+                    //80 como medida de calibración
+
+                    final look = (value.length/80.0*100.0).clamp(0.0, 100.0);//Clamp es el rango
+                    _numLook?.value = look;
+
+                    //3.3 Debounce: si vuelve a escribir, reinicia el timer
+                    _typingDebounce?.cancel();
+                    _typingDebounce = Timer(const Duration(seconds: 1), () {
+                      if(!mounted) return;
+                      //mirada neutra
+                      _isChecking?.change(false);
+                    });
                 },
+                keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   hintText: 'Email',
                   prefixIcon: const Icon(Icons.email),//icono de email para el campo de email
@@ -138,6 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
     //limpiar los focusNodes para evitar fugas de memoria
     _emailFocusNode.dispose();
     _passwordFocusNode.dispose();
+    _typingDebounce?.cancel(); //cancelar el timer de debounce para evitar fugas de memoria
     super.dispose();
   }
 }
